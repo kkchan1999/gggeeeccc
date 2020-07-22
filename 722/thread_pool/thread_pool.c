@@ -2,9 +2,9 @@
 
 void handler(void* arg)
 {
-
     pthread_mutex_unlock((pthread_mutex_t*)arg); //防止死锁，所以在这里添加解锁操作
 }
+
 /* 每一个线程池中的线程所执行的内容， arg就是线程池的地址 */
 void* routine(void* arg)
 {
