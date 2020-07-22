@@ -11,15 +11,17 @@
 #include <string.h>
 #include <unistd.h>
 
-sem_t sem; //信号量
+sem_t sem1; //信号量1
+sem_t sem2; //信号量2
 
 char buf[256];
 
 void* input(void* arg)
 {
     while (1) {
+        sem_wait(&sem1);
         scanf("%s", buf);
-        sem_post(&sem);
+        sem_post(&sem2);
         if (strcmp(buf, "exit") == 0) {
             break;
         }
@@ -32,9 +34,10 @@ void* input(void* arg)
 void* output(void* arg)
 {
     while (1) {
-        sem_wait(&sem);
+        sem_wait(&sem2);
         sleep(2);
         printf("buf: %s\n", buf);
+        sem_post(&sem1);
 
         if (strcmp(buf, "exit") == 0) {
             break;
@@ -48,7 +51,8 @@ void* output(void* arg)
 int main(int argc, char const* argv[])
 {
     //初始化信号量
-    sem_init(&sem, 0, 0);
+    sem_init(&sem1, 0, 1);
+    sem_init(&sem2, 0, 0);
 
     //弄两个线程
     pthread_t tid_r, tid_w;
@@ -62,7 +66,9 @@ int main(int argc, char const* argv[])
     pthread_join(tid_w, NULL);
 
     //销毁信号量
-    sem_destroy(&sem);
+    sem_destroy(&sem1);
+    sem_destroy(&sem2);
+
     printf("搞定收工\n");
     return 0;
 }
