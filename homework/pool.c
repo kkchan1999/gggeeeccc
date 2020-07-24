@@ -65,7 +65,12 @@ void* routine(void* arg)
         (p->task)(pool->staff_info_list, p);
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 
-        //free(p);//这里???
+        //执行完之后收钱阿
+        my_info->money += p->info->money;
+
+        //释放之前申请的内存
+        free(p->info);
+        free(p);
     }
     pthread_exit(NULL);
 }
@@ -77,7 +82,6 @@ bool init_pool(thread_pool_t* pool, unsigned int thread_number)
 
     pool->shutdown = false;
     pool->task_list = malloc(sizeof(struct task)); //申请任务链表头
-    //pool->task_info_list = malloc(sizeof(task_info_t)); //申请任务信息链表头
     pool->staff_info_list = malloc(sizeof(staff_info_t)); //申请员工链表头
 
     if (pool->staff_info_list == NULL || pool->task_list == NULL) {
@@ -92,13 +96,13 @@ bool init_pool(thread_pool_t* pool, unsigned int thread_number)
 
     //创建员工出了点问题
     //员工是个链表,所以用链表的方法去处理
-    staff_info_t* p = NULL;
     for (int i = 0; i < pool->active_threads; i++) {
-        p = calloc(1, sizeof(staff_info_t)); //申请内存
+        staff_info_t* p = NULL;
+        p = malloc(sizeof(staff_info_t)); //申请内存
         p->money = 0;
         p->sex = true;
         strcpy(p->name, "admin"); //随便了
-        strcpy(p->phone, "123456"); //电话随便弄个吧
+        strcpy(p->phone, "123456"); //随便弄个吧
         p->next = NULL;
 
         if (pthread_create(&(p->tid), NULL, routine, (void*)pool) != 0) {
@@ -116,21 +120,35 @@ bool init_pool(thread_pool_t* pool, unsigned int thread_number)
 }
 
 //任务投放
-bool add_task(thread_pool_t* pool, task_t* task)
+void add_task(thread_pool_t* pool, task_t* task)
 {
-    printf("111");
-
     pthread_mutex_lock(&pool->lock);
 
     task->next = pool->task_list->next;
     pool->task_list->next = task;
+
     pthread_mutex_unlock(&pool->lock);
 
-    printf("投放成功\n");
     pool->watting_tasks++;
 
     //叫醒一个线程
     pthread_cond_signal(&pool->cond);
+}
 
+//添加线程
+bool add_staff(thread_pool_t* pool, staff_info_t* staff)
+{
+    if (pool->active_threads >= MAX_ACTIVE_THREADS) {
+        printf("员工太多了！\n");
+        return false;
+    }
+
+    staff_info_t* temp = pool->staff_info_list;
+    while (temp != NULL) {
+        temp = temp->next;
+    }
+    temp->next = staff; //把新线程插在最后
+
+    pool->active_threads++; //活动线程数+1
     return true;
 }

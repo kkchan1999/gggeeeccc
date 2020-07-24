@@ -15,8 +15,12 @@ void mytask(staff_info_t* staff_list, task_t* tasklist)
 }
 
 //封装一个发送任务的函数
-void send_task(thread_pool_t* pool, task_t* task)
+void send_task(thread_pool_t* pool)
 {
+    task_t* task = malloc(sizeof(task_t));
+    task_info_t* taskinfo = malloc(sizeof(task_info_t));
+    task->info = taskinfo;
+
     char buf[256];
 
     task->task = mytask;
@@ -47,6 +51,45 @@ void send_task(thread_pool_t* pool, task_t* task)
     add_task(pool, task);
 }
 
+bool staff_rest(thread_pool_t* pool)
+{
+    if (pool->staff_info_list->next == NULL) {
+        printf("没人上班！\n");
+        return false;
+    }
+
+    printf("有以下员工在干活：\n");
+    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+        printf("%s ", ptr->name);
+    }
+
+    printf("\n请输入谁要休息：");
+    char buf[64];
+    scanf("%s", buf);
+
+    staff_info_t* ptr = NULL;
+    staff_info_t* prev = NULL;
+    for (ptr = pool->staff_info_list->next, prev = pool->staff_info_list; ptr != NULL; prev = ptr, ptr = ptr->next) {
+        if (strcmp(buf, ptr->name) == 0) {
+            pthread_mutex_lock(&pool->lock);
+            prev->next = ptr->next; //修改链表
+            pthread_mutex_unlock(&pool->lock);
+            pthread_cancel(ptr->tid); //取消线程
+            pthread_join(ptr->tid, NULL); //接合线程
+
+            printf("%ld号员工:%s已经休息了，他一共赚了%d元\n", ptr->tid, ptr->name, ptr->money);
+
+            pool->active_threads--;
+
+            free(ptr); //释放资源
+            return true;
+        }
+    }
+
+    printf("输入有误，请重试\n");
+    return false;
+}
+
 int main(int argc, char const* argv[])
 {
     //初始化
@@ -54,9 +97,6 @@ int main(int argc, char const* argv[])
     init_pool(pool, 3);
 
     //新建任务的时候要用到的
-    task_t task;
-    task_info_t taskinfo;
-    task.info = &taskinfo;
 
     char buf[4]; //用来放选项
     bool exit_flag = false;
@@ -65,7 +105,7 @@ int main(int argc, char const* argv[])
         switch (atoi(buf)) {
         case 1:
             printf("任务发送\n");
-            send_task(pool, &task);
+            send_task(pool);
             break;
 
         case 2:
@@ -74,10 +114,18 @@ int main(int argc, char const* argv[])
 
         case 3:
             printf("员工休息\n");
+            staff_rest(pool);
             break;
 
         case 4:
             exit_flag = true;
+            break;
+
+        case 5:
+            for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+                printf("%ld:%s有%d元了\n", ptr->tid, ptr->name, ptr->money);
+            }
+
             break;
 
         default:

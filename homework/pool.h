@@ -10,6 +10,9 @@
 #include <strings.h>
 #include <unistd.h>
 
+#define MAX_WAITING_TASKS 1000 //最大的等待任务数量
+#define MAX_ACTIVE_THREADS 20 //最大的线程数量
+
 //任务信息结构体
 typedef struct task_info {
     char name[64]; //姓名
@@ -63,6 +66,6 @@ typedef struct thread_pool {
 void hander(void* arg);
 void* routine(void* arg);
 bool init_pool(thread_pool_t* pool, unsigned int thread_number);
-bool add_task(thread_pool_t* pool, task_t* task);
+void add_task(thread_pool_t* pool, task_t* task);
 
 #endif
