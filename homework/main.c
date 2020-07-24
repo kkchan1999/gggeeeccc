@@ -148,13 +148,15 @@ int main(int argc, char const* argv[])
 
         case 4:
             exit_flag = true;
+            destroy_pool(pool); //退出前会把东西做完,时间别搞这么长
             break;
 
         case 5:
-            for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
-                printf("%ld:%s有%d元了\n", ptr->tid, ptr->name, ptr->money);
-            }
+            check_money(pool);
+            break;
 
+        case 6:
+            printf("现在有%d个任务没做完\n", pool->watting_tasks);
             break;
 
         default:

@@ -138,10 +138,10 @@ void add_task(thread_pool_t* pool, task_t* task)
 //添加线程
 bool add_staff(thread_pool_t* pool, staff_info_t* staff)
 {
-    if (pool->active_threads >= MAX_ACTIVE_THREADS) {
-        printf("员工太多了！\n");
-        return false;
-    }
+    // if (pool->active_threads >= MAX_ACTIVE_THREADS) {
+    //     printf("员工太多了！\n");
+    //     return false;
+    // }
 
     staff_info_t* temp = pool->staff_info_list;
     while (temp->next != NULL) {
@@ -156,5 +156,47 @@ bool add_staff(thread_pool_t* pool, staff_info_t* staff)
     }
 
     pool->active_threads++; //活动线程数+1
+    return true;
+}
+
+void check_money(thread_pool_t* pool)
+{
+    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+        printf("%ld:%s有%d元了\n", ptr->tid, ptr->name, ptr->money);
+    }
+}
+
+bool destroy_pool(thread_pool_t* pool) //关闭前会把所有任务处理完
+{
+    pool->shutdown = true; //使能退出开关
+    pthread_cond_broadcast(&pool->cond); //唤醒全部线程
+
+    //接合线程
+    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+        errno = pthread_join(ptr->tid, NULL);
+        if (errno != 0) {
+            printf("接合 线程:%ld 失败,errno:%s\n", ptr->tid, strerror(errno));
+        } else {
+            printf("%ld接合成功\n", ptr->tid);
+            pool->active_threads--;
+        }
+    }
+    if (pool->active_threads == 0) {
+        printf("全部线程接合成功!\n");
+    }
+
+    //释放staff的资源
+    if (pool->staff_info_list->next == NULL) {
+        free(pool->staff_info_list); //防止没有任务的时候不释放这块内存
+    } else {
+        check_money(pool);
+        staff_info_t* delete_ptr = pool->staff_info_list;
+        staff_info_t* ptr = pool->staff_info_list->next;
+        for (; ptr != NULL; ptr = delete_ptr = ptr, ptr = ptr->next) {
+            free(delete_ptr);
+        }
+    }
+
+    free(pool->task_list);
     return true;
 }
