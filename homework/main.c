@@ -1,8 +1,22 @@
 #include "pool.h"
 
-void mytask(void* arg)
+void mytask(staff_info_t* staff_list, task_t* tasklist)
 {
-    //这个是啥
+    staff_info_t* ptr;
+    printf("%s下单了", tasklist->info->name);
+
+    for (ptr = staff_list->next; ptr != NULL; ptr = ptr->next) {
+        if (pthread_self() == ptr->tid) {
+            printf("跑腿小哥:%s\n工号:%ld\n已接单\n", ptr->name, ptr->tid);
+            break;
+        }
+    }
+    sleep(tasklist->info->time);
+}
+
+//封装一个发送任务的函数
+void send_task()
+{
 }
 
 int main(int argc, char const* argv[])
@@ -11,14 +25,26 @@ int main(int argc, char const* argv[])
     thread_pool_t* pool = malloc(sizeof(thread_pool_t));
     init_pool(pool, 3);
 
-    //菜单
-    char buf[4];
+    task_t task;
+    task_info_t taskinfo;
+    task.info = &taskinfo;
+
+    char buf[4]; //用来放选项
     bool exit_flag = false;
     while (!exit_flag) {
         scanf("%s", buf);
         switch (atoi(buf)) {
         case 1:
             printf("任务发送\n");
+
+            strcpy(taskinfo.name, "joy");
+            taskinfo.time = 3;
+            task.task = mytask;
+            task.arg = pool;
+
+            printf("准备投放\n");
+            add_task(pool, &task);
+
             break;
 
         case 2:

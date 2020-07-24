@@ -20,16 +20,16 @@ typedef struct task_info {
     int money; //佣金数量
     int time; //花费的时间
 
-    struct task_info* next; //下一个任务信息节点
+    //struct task_info* next; //下一个任务信息节点
 } task_info_t;
 
 //任务链表结构体
-struct task {
-    void (*task)(void* pool, void* arg); //函数指针
+typedef struct task {
+    void (*task)(void* staff_list, void* userinfo); //函数指针
     void* arg; //传入函数的参数
-    task_info_t info;
+    task_info_t* info;
     struct task* next; //下一个任务节点
-};
+} task_t;
 
 //员工信息结构体
 typedef struct staff_info {
@@ -45,8 +45,8 @@ typedef struct thread_pool {
     pthread_mutex_t lock; //线程池同步用的互斥锁
     pthread_cond_t cond; //条件变量,用于线程睡眠
 
-    struct task* task_list; //任务链表
-    task_info_t* task_info_list; //任务信息链表
+    task_t* task_list; //任务链表
+    //task_info_t* task_info_list; //任务信息链表
     staff_info_t* staff_info_list; //员工信息链表,里面包含了tid
 
     unsigned watting_tasks; //等待的任务数量,也是任务链表的长度
@@ -63,5 +63,6 @@ typedef struct thread_pool {
 void hander(void* arg);
 void* routine(void* arg);
 bool init_pool(thread_pool_t* pool, unsigned int thread_number);
+bool add_task(thread_pool_t* pool, task_t* task);
 
 #endif

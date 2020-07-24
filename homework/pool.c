@@ -7,10 +7,35 @@ void hander(void* arg)
 
 void* routine(void* arg)
 {
-    printf("爷开始干活了,爷的tid是:%ld\n", pthread_self());
-    thread_pool_t* pool = (thread_pool_t*)arg; //将线程池的地址存其来
+    pthread_t my_tid = pthread_self();
+    printf("爷开始干活了,爷的tid是:%ld\n", my_tid);
+    thread_pool_t* pool = (thread_pool_t*)arg; //将线程池的地址存起来
     struct task* p; //整个指针用来遍历任务列表
 
+    //把自己的信息拿过来
+    //首先在链表里面找到自己
+
+    staff_info_t* my_info
+        = pool->staff_info_list;
+    while (my_info != NULL) {
+        if (my_info->tid == my_tid) {
+            printf("找到员工信息了!:%ld\t%s\t%s\t%d\t%d\n",
+                my_info->tid,
+                my_info->name,
+                my_info->phone,
+                my_info->sex,
+                my_info->money);
+            break;
+        } else {
+            my_info = my_info->next;
+        }
+    }
+    if (my_info == NULL) {
+        printf("信息找不到,肯定有地方出错了!\n");
+        pthread_exit(NULL);
+    }
+
+    //开始循环
     while (1) {
         pthread_cleanup_push(hander, (void*)&pool->lock);
         pthread_mutex_lock(&pool->lock);
@@ -20,22 +45,27 @@ void* routine(void* arg)
             pthread_cond_wait(&pool->cond, &pool->lock);
         }
 
+        //被叫醒,看看是不是真的有任务
         if (pool->watting_tasks == 0 && pool->shutdown == true) {
             pthread_mutex_unlock(&pool->lock);
             pthread_exit(NULL);
         }
 
+        //这里开始应该是确认开始任务的,后期可以在这里修改
+
+        //把任务拿走然后解锁
         p = pool->task_list->next;
         pool->task_list->next = p->next;
         pool->watting_tasks--;
+
         pthread_mutex_unlock(&pool->lock);
         pthread_cleanup_pop(0);
 
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-        (p->task)(pool, p->arg);
+        (p->task)(pool->staff_info_list, p);
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 
-        free(p);
+        //free(p);//这里???
     }
     pthread_exit(NULL);
 }
@@ -47,16 +77,16 @@ bool init_pool(thread_pool_t* pool, unsigned int thread_number)
 
     pool->shutdown = false;
     pool->task_list = malloc(sizeof(struct task)); //申请任务链表头
-    pool->task_info_list = malloc(sizeof(task_info_t)); //申请任务信息链表头
+    //pool->task_info_list = malloc(sizeof(task_info_t)); //申请任务信息链表头
     pool->staff_info_list = malloc(sizeof(staff_info_t)); //申请员工链表头
 
-    if (pool->staff_info_list == NULL || pool->task_info_list == NULL || pool->task_list == NULL) {
+    if (pool->staff_info_list == NULL || pool->task_list == NULL) {
         perror("申请内存失败");
         return false;
     }
 
     pool->task_list->next = NULL;
-    pool->task_info_list = NULL;
+    //pool->task_info_list = NULL;
     pool->watting_tasks = 0;
     pool->active_threads = thread_number;
 
@@ -81,4 +111,26 @@ bool init_pool(thread_pool_t* pool, unsigned int thread_number)
         }
         temp->next = p;
     }
+
+    return true;
+}
+
+//任务投放
+bool add_task(thread_pool_t* pool, task_t* task)
+{
+    printf("111");
+
+    pthread_mutex_lock(&pool->lock);
+
+    task->next = pool->task_list->next;
+    pool->task_list->next = task;
+    pthread_mutex_unlock(&pool->lock);
+
+    printf("投放成功\n");
+    pool->watting_tasks++;
+
+    //叫醒一个线程
+    pthread_cond_signal(&pool->cond);
+
+    return true;
 }
