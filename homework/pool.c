@@ -68,7 +68,7 @@ void* routine(void* arg)
         //执行完之后收钱阿
         my_info->money += p->info->money;
 
-        //释放之前申请的内存
+        //释放之前创建任务申请的内存
         free(p->info);
         free(p);
     }
@@ -144,10 +144,16 @@ bool add_staff(thread_pool_t* pool, staff_info_t* staff)
     }
 
     staff_info_t* temp = pool->staff_info_list;
-    while (temp != NULL) {
+    while (temp->next != NULL) {
         temp = temp->next;
     }
-    temp->next = staff; //把新线程插在最后
+
+    temp->next = staff; //把新线程的信息插在最后
+
+    if (pthread_create(&staff->tid, NULL, routine, pool) != 0) {
+        perror("创建线程失败");
+        return false;
+    }
 
     pool->active_threads++; //活动线程数+1
     return true;

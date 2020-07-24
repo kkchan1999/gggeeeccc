@@ -47,7 +47,6 @@ void send_task(thread_pool_t* pool)
     scanf("%s", buf);
     task->info->money = atoi(buf);
 
-    printf("准备投放\n");
     add_task(pool, task);
 }
 
@@ -90,13 +89,42 @@ bool staff_rest(thread_pool_t* pool)
     return false;
 }
 
+bool input_staff(thread_pool_t* pool)
+{
+    staff_info_t* ptr = malloc(sizeof(staff_info_t));
+
+    char buf[256];
+
+    printf("请输入员工姓名：");
+    scanf("%s", buf);
+    strcpy(ptr->name, buf);
+
+    printf("请输入员工电话：");
+    scanf("%s", buf);
+    strcpy(ptr->phone, buf);
+
+    printf("请输入员工性别（0或1）：");
+    scanf("%s", buf);
+    int sex = atoi(buf);
+    if (sex != 0 && sex != 1) {
+        printf("输入错误！\n");
+    } else {
+        ptr->sex = sex;
+    }
+
+    ptr->money = 0; //新员工还想有钱？
+    ptr->next = NULL;
+
+    add_staff(pool, ptr);
+
+    return true;
+}
+
 int main(int argc, char const* argv[])
 {
     //初始化
     thread_pool_t* pool = malloc(sizeof(thread_pool_t));
     init_pool(pool, 3);
-
-    //新建任务的时候要用到的
 
     char buf[4]; //用来放选项
     bool exit_flag = false;
@@ -110,6 +138,7 @@ int main(int argc, char const* argv[])
 
         case 2:
             printf("员工注册\n");
+            input_staff(pool);
             break;
 
         case 3:
