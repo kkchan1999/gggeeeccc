@@ -15,8 +15,36 @@ void mytask(staff_info_t* staff_list, task_t* tasklist)
 }
 
 //封装一个发送任务的函数
-void send_task()
+void send_task(thread_pool_t* pool, task_t* task)
 {
+    char buf[256];
+
+    task->task = mytask;
+    task->arg = pool;
+
+    //输入数据
+    printf("请输入客户名字：");
+    scanf("%s", buf);
+    strcpy(task->info->name, buf);
+
+    printf("请输入用户的电话：");
+    scanf("%s", buf);
+    strcpy(task->info->phone, buf);
+
+    printf("请输入任务说明：");
+    scanf("%s", buf);
+    strcpy(task->info->task_text, buf);
+
+    printf("请输入任务时长：");
+    scanf("%s", buf);
+    task->info->time = atoi(buf);
+
+    printf("请输入任务佣金：");
+    scanf("%s", buf);
+    task->info->money = atoi(buf);
+
+    printf("准备投放\n");
+    add_task(pool, task);
 }
 
 int main(int argc, char const* argv[])
@@ -25,6 +53,7 @@ int main(int argc, char const* argv[])
     thread_pool_t* pool = malloc(sizeof(thread_pool_t));
     init_pool(pool, 3);
 
+    //新建任务的时候要用到的
     task_t task;
     task_info_t taskinfo;
     task.info = &taskinfo;
@@ -36,15 +65,7 @@ int main(int argc, char const* argv[])
         switch (atoi(buf)) {
         case 1:
             printf("任务发送\n");
-
-            strcpy(taskinfo.name, "joy");
-            taskinfo.time = 3;
-            task.task = mytask;
-            task.arg = pool;
-
-            printf("准备投放\n");
-            add_task(pool, &task);
-
+            send_task(pool, &task);
             break;
 
         case 2:
