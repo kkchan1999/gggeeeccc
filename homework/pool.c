@@ -213,7 +213,7 @@ void check_money(thread_pool_t* pool)
 bool destroy_pool(thread_pool_t* pool)
 {
     if (pool->watting_tasks != 0) {
-        printf("还没完成所有人物,不能退出!\n");
+        printf("还没完成所有任务,不能退出!\n");
         return false;
     }
 
