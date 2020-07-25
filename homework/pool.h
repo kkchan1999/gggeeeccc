@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,8 +11,8 @@
 #include <strings.h>
 #include <unistd.h>
 
-#define MAX_WAITING_TASKS 1000 //最大的等待任务数量
-#define MAX_ACTIVE_THREADS 20 //最大的线程数量
+//#define MAX_WAITING_TASKS 1000 //最大的等待任务数量
+//#define MAX_ACTIVE_THREADS 20 //最大的线程数量
 
 //任务信息结构体
 typedef struct task_info {
@@ -41,6 +42,8 @@ typedef struct staff_info {
     char phone[256];
     bool sex;
     int money; //记录一下赚了多少钱
+    bool onwork;
+    sem_t sem; //信号量,用来手动停止
     struct staff_info* next;
 } staff_info_t;
 

@@ -65,7 +65,7 @@ void* routine(void* arg)
         (p->task)(pool->staff_info_list, p);
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 
-        //执行完之后收钱阿
+        //执行完之后收钱,收钱原则:规定时间内做完收用户给的,超时多少就收超市部分*2
         my_info->money += p->info->money;
 
         //释放之前创建任务申请的内存
@@ -105,6 +105,10 @@ bool init_pool(thread_pool_t* pool, unsigned int thread_number)
         strcpy(p->phone, "123456"); //随便弄个吧
         p->next = NULL;
 
+        p->onwork = false;
+
+        sem_init(&p->sem, 0, 0); //初始化信号量
+
         if (pthread_create(&(p->tid), NULL, routine, (void*)pool) != 0) {
             perror("创建线程失败!");
             return false;
@@ -138,11 +142,6 @@ void add_task(thread_pool_t* pool, task_t* task)
 //添加线程
 bool add_staff(thread_pool_t* pool, staff_info_t* staff)
 {
-    // if (pool->active_threads >= MAX_ACTIVE_THREADS) {
-    //     printf("员工太多了！\n");
-    //     return false;
-    // }
-
     staff_info_t* temp = pool->staff_info_list;
     while (temp->next != NULL) {
         temp = temp->next;

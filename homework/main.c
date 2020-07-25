@@ -2,6 +2,7 @@
 
 void mytask(staff_info_t* staff_list, task_t* tasklist)
 {
+
     staff_info_t* ptr;
     printf("%s下单了", tasklist->info->name);
 
@@ -11,7 +12,13 @@ void mytask(staff_info_t* staff_list, task_t* tasklist)
             break;
         }
     }
-    sleep(tasklist->info->time);
+    ptr->onwork = true;
+    //sleep(tasklist->info->time); //自动停止的情况
+
+    //手动停止要给个信号量
+    sem_wait(&ptr->sem);
+
+    ptr->onwork = false;
 }
 
 //封装一个发送任务的函数
@@ -57,24 +64,33 @@ bool staff_rest(thread_pool_t* pool)
         return false;
     }
 
-    printf("有以下员工在干活：\n");
-    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
-        printf("%s ", ptr->name);
+    staff_info_t* ptr = NULL;
+    printf("有以下员工空闲：\n");
+    for (ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+        if (ptr->onwork == false) {
+            printf("%s ", ptr->name);
+        }
     }
+    // if (ptr == NULL) {
+    //     printf("全部员工都在干活,暂时不能休息!\n");
+    //     return false;
+    // }
 
     printf("\n请输入谁要休息：");
     char buf[64];
     scanf("%s", buf);
 
-    staff_info_t* ptr = NULL;
+    ptr = NULL;
     staff_info_t* prev = NULL;
     for (ptr = pool->staff_info_list->next, prev = pool->staff_info_list; ptr != NULL; prev = ptr, ptr = ptr->next) {
-        if (strcmp(buf, ptr->name) == 0) {
+        if (strcmp(buf, ptr->name) == 0 && ptr->onwork == false) {
             pthread_mutex_lock(&pool->lock);
             prev->next = ptr->next; //修改链表
             pthread_mutex_unlock(&pool->lock);
             pthread_cancel(ptr->tid); //取消线程
             pthread_join(ptr->tid, NULL); //接合线程
+
+            sem_destroy(&ptr->sem); //销毁信号量
 
             printf("%ld号员工:%s已经休息了，他一共赚了%d元\n", ptr->tid, ptr->name, ptr->money);
 
@@ -85,6 +101,34 @@ bool staff_rest(thread_pool_t* pool)
         }
     }
 
+    printf("输入有误，请重试\n");
+    return false;
+}
+
+bool finsh_task(thread_pool_t* pool)
+{
+    if (pool->staff_info_list->next == NULL) {
+        printf("没人上班！\n");
+        return false;
+    }
+
+    printf("有以下员工在干活：\n");
+    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+        if (ptr->onwork == true) {
+            printf("%s ", ptr->name);
+        }
+    }
+
+    printf("请输入要完成任务的员工名:");
+    char buf[256];
+    scanf("%s", buf);
+    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+        if (strcmp(buf, ptr->name) == 0 && ptr->onwork == true) {
+            printf("%s完成任务\n", ptr->name);
+            sem_post(&ptr->sem);
+            return true;
+        }
+    }
     printf("输入有误，请重试\n");
     return false;
 }
@@ -115,6 +159,8 @@ bool input_staff(thread_pool_t* pool)
     ptr->money = 0; //新员工还想有钱？
     ptr->next = NULL;
 
+    sem_init(&ptr->sem, 0, 0); //初始化信号量
+
     add_staff(pool, ptr);
 
     return true;
@@ -124,7 +170,7 @@ int main(int argc, char const* argv[])
 {
     //初始化
     thread_pool_t* pool = malloc(sizeof(thread_pool_t));
-    init_pool(pool, 3);
+    init_pool(pool, 0);
 
     char buf[4]; //用来放选项
     bool exit_flag = false;
@@ -142,11 +188,16 @@ int main(int argc, char const* argv[])
             break;
 
         case 3:
+            printf("手动完成任务");
+            finsh_task(pool);
+            break;
+        case 4:
+
             printf("员工休息\n");
             staff_rest(pool);
             break;
 
-        case 4:
+        case 0:
             exit_flag = true;
             destroy_pool(pool); //退出前会把东西做完,时间别搞这么长
             break;
