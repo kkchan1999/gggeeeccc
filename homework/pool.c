@@ -8,7 +8,7 @@ void hander(void* arg)
 void* routine(void* arg)
 {
     pthread_t my_tid = pthread_self();
-    printf("爷开始干活了,爷的tid是:%ld\n", my_tid);
+
     thread_pool_t* pool = (thread_pool_t*)arg; //将线程池的地址存起来
     struct task* p; //整个指针用来遍历任务列表
 
@@ -34,6 +34,7 @@ void* routine(void* arg)
         printf("信息找不到,肯定有地方出错了!\n");
         pthread_exit(NULL);
     }
+    printf("%s:开始上班\n", my_info->name);
 
     //开始循环
     while (1) {
@@ -41,7 +42,7 @@ void* routine(void* arg)
         pthread_mutex_lock(&pool->lock);
 
         while (pool->watting_tasks == 0 && !pool->shutdown) {
-            printf("%ld没事干,睡觉\n", pthread_self());
+            printf("%s没事干,睡觉\n", my_info->name);
             pthread_cond_wait(&pool->cond, &pool->lock);
         }
 
@@ -61,12 +62,32 @@ void* routine(void* arg)
         pthread_mutex_unlock(&pool->lock);
         pthread_cleanup_pop(0);
 
+        time_t t;
+        struct tm* local_tm;
+        time(&t);
+        local_tm = localtime(&t);
+
+        time_t t1 = mktime(local_tm);
+
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
         (p->task)(pool->staff_info_list, p);
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 
-        //执行完之后收钱,收钱原则:规定时间内做完收用户给的,超时多少就收超市部分*2
-        my_info->money += p->info->money;
+        time(&t);
+        local_tm = localtime(&t);
+        time_t t2 = mktime(local_tm);
+        time_t finsh_time = t2 - t1; //最终用时
+
+        //执行完之后收钱,收钱原则:规定时间内做完收用户给的,超时多少就收超时部分*2
+        int salary = p->info->money;
+        printf("%s完成%s的任务,用时%lds,", my_info->name, p->info->name, finsh_time);
+        if (finsh_time > p->info->time) {
+            printf("超时%ld秒,", finsh_time - p->info->time);
+            salary = p->info->money + (finsh_time - p->info->time) * 2;
+        }
+        printf("此次任务薪水为:%d元,", salary);
+        my_info->money += salary;
+        printf("%s目前有%d元了\n", my_info->name, my_info->money);
 
         //释放之前创建任务申请的内存
         free(p->info);
