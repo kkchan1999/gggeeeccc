@@ -103,7 +103,7 @@ bool staff_rest(thread_pool_t* pool)
             sem_destroy(&ptr->sem); //销毁信号量
 
             printf("%ld号员工:%s已经休息了，他一共赚了%d元\n", ptr->tid, ptr->name, ptr->money);
-
+            print_staff(ptr);
             pool->active_threads--;
 
             free(ptr); //释放资源

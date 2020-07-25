@@ -226,6 +226,7 @@ bool destroy_pool(thread_pool_t* pool)
         if (errno != 0) {
             printf("接合 线程:%ld 失败,errno:%s\n", ptr->tid, strerror(errno));
         } else {
+            print_staff(ptr);
             printf("%ld接合成功\n", ptr->tid);
             pool->active_threads--;
         }
@@ -247,5 +248,20 @@ bool destroy_pool(thread_pool_t* pool)
     }
 
     free(pool->task_list);
+    return true;
+}
+
+bool print_staff(staff_info_t* staff)
+{
+    FILE* f = fopen("./staff.txt", "a+");
+    if (f == NULL) {
+        perror("打开文件失败!");
+        return false;
+    }
+
+    fprintf(f, "name:%s,phone:%s,sex:%d,money:%d\n", staff->name, staff->phone, staff->sex, staff->money);
+
+    fclose(f);
+
     return true;
 }

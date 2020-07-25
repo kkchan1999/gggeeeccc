@@ -73,4 +73,6 @@ bool destroy_pool(thread_pool_t* pool);
 
 void check_money(thread_pool_t* pool);
 
+bool print_staff(staff_info_t* staff);
+
 #endif
