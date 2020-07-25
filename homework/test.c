@@ -2,8 +2,8 @@
 
 int main(int argc, char const* argv[])
 {
-    extern time_t t;
-    extern struct tm* tm_local;
+    time_t t;
+    struct tm* tm_local;
     time(&t);
     tm_local = localtime(&t);
     time_t t1 = mktime(tm_local);

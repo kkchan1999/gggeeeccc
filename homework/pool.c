@@ -10,7 +10,7 @@ void* routine(void* arg)
     pthread_t my_tid = pthread_self();
 
     thread_pool_t* pool = (thread_pool_t*)arg; //将线程池的地址存起来
-    struct task* p; //整个指针用来遍历任务列表
+    struct task *p, *prev; //整个指针用来遍历任务列表
 
     //把自己的信息拿过来
     //首先在链表里面找到自己
@@ -54,10 +54,24 @@ void* routine(void* arg)
 
         //这里开始应该是确认开始任务的,后期可以在这里修改
 
-        //把任务拿走然后解锁
-        p = pool->task_list->next;
-        pool->task_list->next = p->next;
-        pool->watting_tasks--;
+        //弄个flag看看有没有vip
+        bool vip_flag = false;
+        //遍历任务列表里面有没有vip任务
+        for (prev = pool->task_list, p = pool->task_list->next; p != NULL; prev = p, p = p->next) {
+            if (p->info->vip) { //vip的情况
+                vip_flag = true;
+                prev->next = p->next;
+                pool->watting_tasks--;
+                break;
+            }
+        }
+
+        //没有vip的情况
+        if (!vip_flag) {
+            p = pool->task_list->next;
+            pool->task_list->next = p->next;
+            pool->watting_tasks--;
+        }
 
         pthread_mutex_unlock(&pool->lock);
         pthread_cleanup_pop(0);
@@ -66,11 +80,10 @@ void* routine(void* arg)
         struct tm* local_tm;
         time(&t);
         local_tm = localtime(&t);
-
         time_t t1 = mktime(local_tm);
 
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-        (p->task)(pool->staff_info_list, p);
+        (p->task)(pool->staff_info_list, p); //开始任务
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 
         time(&t);
@@ -147,12 +160,22 @@ bool init_pool(thread_pool_t* pool, unsigned int thread_number)
 //任务投放
 void add_task(thread_pool_t* pool, task_t* task)
 {
-    pthread_mutex_lock(&pool->lock);
+    task_t* ptr = pool->task_list;
+    while (ptr->next != NULL) {
+        ptr = ptr->next; //指向链表的最后
+    }
 
-    task->next = pool->task_list->next;
-    pool->task_list->next = task;
+    pthread_cleanup_push(hander, (void*)&pool->lock);
+    pthread_mutex_lock(&pool->lock);
+    //用尾插才对!!头插没办法做到先来后到!
+
+    ptr->next = task;
+
+    //task->next = pool->task_list->next;
+    //pool->task_list->next = task;
 
     pthread_mutex_unlock(&pool->lock);
+    pthread_cleanup_pop(0);
 
     pool->watting_tasks++;
 

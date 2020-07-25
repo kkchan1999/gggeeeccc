@@ -21,6 +21,8 @@ typedef struct task_info {
 
     char task_text[256]; //任务说明
 
+    bool vip; //是否为尊贵的vip用户
+
     int money; //佣金数量
     int time; //花费的时间
 
@@ -61,10 +63,6 @@ typedef struct thread_pool {
     bool shutdown; //线程池的开关
 
 } thread_pool_t;
-
-//遍历链表
-#define list_for_each(list_head, ptr) \
-    for (ptr = list_head->next; ptr != NULL; ptr = ptr->NULL)
 
 void hander(void* arg);
 void* routine(void* arg);

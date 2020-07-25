@@ -38,6 +38,16 @@ void send_task(thread_pool_t* pool)
     scanf("%s", buf);
     strcpy(task->info->name, buf);
 
+    printf("该用户是vip吗?");
+    scanf("%s", buf);
+    int vip = atoi(buf);
+    if (vip != 0 && vip != 1) {
+        printf("输入错误！\n");
+        return;
+    } else {
+        task->info->vip = vip;
+    }
+
     printf("请输入用户的电话：");
     scanf("%s", buf);
     strcpy(task->info->phone, buf);
@@ -152,6 +162,7 @@ bool input_staff(thread_pool_t* pool)
     int sex = atoi(buf);
     if (sex != 0 && sex != 1) {
         printf("输入错误！\n");
+        return false;
     } else {
         ptr->sex = sex;
     }
