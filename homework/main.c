@@ -175,31 +175,29 @@ int main(int argc, char const* argv[])
     char buf[4]; //用来放选项
     bool exit_flag = false;
     while (!exit_flag) {
+        printf("请选择选项:\n1.发送任务\n2.员工注册\n3.手动完成任务\n4.员工休息\n5.查看员工薪水\n6.查看剩余任务数\n0.退出系统(有bug)\n");
         scanf("%s", buf);
         switch (atoi(buf)) {
         case 1:
-            printf("任务发送\n");
             send_task(pool);
             break;
 
         case 2:
-            printf("员工注册\n");
             input_staff(pool);
             break;
 
         case 3:
-            printf("手动完成任务");
             finsh_task(pool);
             break;
         case 4:
 
-            printf("员工休息\n");
             staff_rest(pool);
             break;
 
         case 0:
-            exit_flag = true;
-            destroy_pool(pool); //退出前会把东西做完,时间别搞这么长
+            if (destroy_pool(pool)) {
+                exit_flag = true;
+            }
             break;
 
         case 5:

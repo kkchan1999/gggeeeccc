@@ -186,8 +186,14 @@ void check_money(thread_pool_t* pool)
     }
 }
 
-bool destroy_pool(thread_pool_t* pool) //关闭前会把所有任务处理完
+//关闭前会把所有任务处理完
+bool destroy_pool(thread_pool_t* pool)
 {
+    if (pool->watting_tasks != 0) {
+        printf("还没完成所有人物,不能退出!\n");
+        return false;
+    }
+
     pool->shutdown = true; //使能退出开关
     pthread_cond_broadcast(&pool->cond); //唤醒全部线程
 
