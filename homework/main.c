@@ -186,7 +186,7 @@ int main(int argc, char const* argv[])
     char buf[4]; //用来放选项
     bool exit_flag = false;
     while (!exit_flag) {
-        printf("请选择选项:\n1.发送任务\n2.员工注册\n3.手动完成任务\n4.员工休息\n5.查看员工薪水\n6.查看剩余任务数\n0.退出系统(有bug)\n");
+        printf("请选择选项:\n1.发送任务\n2.员工注册\n3.手动完成任务\n4.员工休息\n5.查看员工薪水\n6.查看剩余任务数\n0.退出系统\n");
         scanf("%s", buf);
         switch (atoi(buf)) {
         case 1:
