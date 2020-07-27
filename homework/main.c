@@ -129,7 +129,7 @@ bool finsh_task(thread_pool_t* pool)
         }
     }
 
-    printf("请输入要完成任务的员工名:");
+    printf("\n请输入要完成任务的员工名:");
     char buf[256];
     scanf("%s", buf);
     for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
@@ -154,15 +154,18 @@ bool add_staff_from_file(thread_pool_t* pool)
         printf("打开失败!\n");
         return -1;
     }
+    int count = 0;
     while (1) {
         staff_info_t* staff = malloc(sizeof(staff_info_t));
         if (read_staff(f, staff) == false) {
             break;
         }
-
+        staff->onwork = false;
+        staff->next = NULL;
         add_staff(pool, staff);
+        count++;
     }
-
+    printf("添加了%d个员工\n!", count);
     fclose(f);
     return 0;
 }
@@ -194,8 +197,6 @@ bool input_staff(thread_pool_t* pool)
     ptr->money = 0; //新员工还想有钱？
     ptr->next = NULL;
 
-    sem_init(&ptr->sem, 0, 0); //初始化信号量
-
     add_staff(pool, ptr);
 
     return true;
@@ -219,7 +220,8 @@ int main(int argc, char const* argv[])
     char buf[4]; //用来放选项
     bool exit_flag = false;
     while (!exit_flag) {
-        printf("请选择选项:\n1.发送任务\n2.员工注册\n3.手动完成任务\n4.员工休息\n5.查看员工\n6.查看剩余任务数\n7.从文件录入员工\n0.退出系统\n");
+        printf("\n*******************\n");
+        printf("请选择选项:\n1.发送任务\n2.员工注册\n3.手动完成任务\n4.员工休息\n5.查看员工\n6.查看剩余任务数\n7.从文件录入员工(内侧版)\n0.退出系统\n\n");
         scanf("%s", buf);
         switch (atoi(buf)) {
         case 1:
@@ -233,8 +235,8 @@ int main(int argc, char const* argv[])
         case 3:
             finsh_task(pool);
             break;
-        case 4:
 
+        case 4:
             staff_rest(pool);
             break;
 

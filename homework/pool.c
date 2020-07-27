@@ -57,6 +57,7 @@ void* routine(void* arg)
         //弄个flag看看有没有vip
         bool vip_flag = false;
         //遍历任务列表里面有没有vip任务
+
         for (prev = pool->task_list, p = pool->task_list->next; p != NULL; prev = p, p = p->next) {
             if (p->info->vip) { //vip的情况
                 vip_flag = true;
@@ -72,7 +73,6 @@ void* routine(void* arg)
             pool->task_list->next = p->next;
             pool->watting_tasks--;
         }
-
         pthread_mutex_unlock(&pool->lock);
         pthread_cleanup_pop(0);
 
@@ -200,6 +200,8 @@ bool add_staff(thread_pool_t* pool, staff_info_t* staff)
         return false;
     }
 
+    sem_init(&staff->sem, 0, 0); //初始化信号量
+
     pool->active_threads++; //活动线程数+1
     return true;
 }
@@ -242,7 +244,6 @@ bool destroy_pool(thread_pool_t* pool)
     if (pool->staff_info_list->next == NULL) {
         free(pool->staff_info_list); //防止没有任务的时候不释放这块内存
     } else {
-        check_money(pool);
         staff_info_t* delete_ptr = pool->staff_info_list;
         staff_info_t* ptr = pool->staff_info_list->next;
         for (; ptr != NULL; ptr = delete_ptr = ptr, ptr = ptr->next) {
