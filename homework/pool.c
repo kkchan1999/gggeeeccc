@@ -214,10 +214,18 @@ void check_money(thread_pool_t* pool)
 //关闭前会把所有任务处理完
 bool destroy_pool(thread_pool_t* pool)
 {
-    if (pool->watting_tasks != 0) {
-        printf("还没完成所有任务,不能退出!\n");
-        return false;
+    // if (pool->watting_tasks != 0) {
+    //     printf("还没完成所有任务,不能退出!\n");
+    //     return false;
+    // }
+
+    //自动分配完成所有任务,妥善退出.
+    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
+        for (int i = 0; i < pool->active_threads + pool->watting_tasks; i++) {
+            sem_post(&ptr->sem);
+        }
     }
+    printf("sem_post success\n");
 
     pool->shutdown = true; //使能退出开关
     pthread_cond_broadcast(&pool->cond); //唤醒全部线程
