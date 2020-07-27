@@ -204,13 +204,6 @@ bool add_staff(thread_pool_t* pool, staff_info_t* staff)
     return true;
 }
 
-void check_money(thread_pool_t* pool)
-{
-    for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
-        printf("%ld:%s有%d元了\n", ptr->tid, ptr->name, ptr->money);
-    }
-}
-
 //关闭前会把所有任务处理完
 bool destroy_pool(thread_pool_t* pool)
 {

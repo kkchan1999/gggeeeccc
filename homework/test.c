@@ -13,10 +13,9 @@ int main(int argc, char const* argv[])
             break;
         }
 
-        add_staff(pool, staff);
+        // add_staff(pool, staff);
     }
 
     fclose(f);
     return 0;
 }
-

@@ -71,8 +71,6 @@ void add_task(thread_pool_t* pool, task_t* task);
 bool add_staff(thread_pool_t* pool, staff_info_t* staff);
 bool destroy_pool(thread_pool_t* pool);
 
-void check_money(thread_pool_t* pool);
-
 bool print_staff(staff_info_t* staff);
 bool print_task(task_info_t* task);
 
