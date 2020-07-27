@@ -143,6 +143,30 @@ bool finsh_task(thread_pool_t* pool)
     return false;
 }
 
+bool add_staff_from_file(thread_pool_t* pool)
+{
+    printf("请输入文件路径:");
+    char buf[256];
+    scanf("%s", buf);
+
+    FILE* f = fopen(buf, "r");
+    if (f == NULL) {
+        printf("打开失败!\n");
+        return -1;
+    }
+    while (1) {
+        staff_info_t* staff = malloc(sizeof(staff_info_t));
+        if (read_staff(f, staff) == false) {
+            break;
+        }
+
+        add_staff(pool, staff);
+    }
+
+    fclose(f);
+    return 0;
+}
+
 bool input_staff(thread_pool_t* pool)
 {
     staff_info_t* ptr = malloc(sizeof(staff_info_t));
@@ -186,7 +210,7 @@ int main(int argc, char const* argv[])
     char buf[4]; //用来放选项
     bool exit_flag = false;
     while (!exit_flag) {
-        printf("请选择选项:\n1.发送任务\n2.员工注册\n3.手动完成任务\n4.员工休息\n5.查看员工薪水\n6.查看剩余任务数\n0.退出系统\n");
+        printf("请选择选项:\n1.发送任务\n2.员工注册\n3.手动完成任务\n4.员工休息\n5.查看员工薪水\n6.查看剩余任务数\n7.从文件录入员工\n0.退出系统\n");
         scanf("%s", buf);
         switch (atoi(buf)) {
         case 1:
@@ -217,6 +241,11 @@ int main(int argc, char const* argv[])
 
         case 6:
             printf("现在有%d个任务没做完\n", pool->watting_tasks);
+            break;
+
+        case 7:
+
+            add_staff_from_file(pool);
             break;
 
         default:

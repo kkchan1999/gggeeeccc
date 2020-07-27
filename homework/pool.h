@@ -76,4 +76,5 @@ void check_money(thread_pool_t* pool);
 bool print_staff(staff_info_t* staff);
 bool print_task(task_info_t* task);
 
+bool read_staff(FILE* f, staff_info_t* staff);
 #endif

@@ -221,7 +221,7 @@ bool destroy_pool(thread_pool_t* pool)
 
     //自动分配完成所有任务,妥善退出.
     for (staff_info_t* ptr = pool->staff_info_list->next; ptr != NULL; ptr = ptr->next) {
-        for (int i = 0; i < pool->active_threads + pool->watting_tasks; i++) {
+        for (int i = 0; i < pool->active_threads + pool->watting_tasks; i++) { //线程数+等待任务数,有冗余
             sem_post(&ptr->sem);
         }
     }
@@ -269,7 +269,7 @@ bool print_staff(staff_info_t* staff)
         return false;
     }
 
-    fprintf(f, "%s#%s#%d#%d\n", staff->name, staff->phone, staff->sex, staff->money);
+    fprintf(f, "%s#%s#%d#%d#\n", staff->name, staff->phone, staff->sex, staff->money);
 
     fclose(f);
 
@@ -284,8 +284,57 @@ bool print_task(task_info_t* task)
         return false;
     }
 
-    fprintf(f, "%s#%s#%s#%d#%d#%d\n", task->name, task->phone, task->task_text, task->vip, task->time, task->money);
+    fprintf(f, "%s#%s#%s#%d#%d#%d#\n", task->name, task->phone, task->task_text, task->vip, task->time, task->money);
 
     fclose(f);
+    return true;
+}
+
+bool read_staff(FILE* f, staff_info_t* staff)
+{
+    char buf[256];
+
+    if (fgets(buf, 256, f) == NULL) {
+        return false;
+    }
+
+    char name[256];
+    char phone[256];
+    char sex[4];
+    char money[16];
+    bzero(money, 16);
+    bzero(name, 256);
+    bzero(phone, 256);
+    bzero(sex, 4);
+
+    char c;
+
+    int i;
+    for (i = 0; c != '#'; i++, c = buf[i]) {
+        name[i] = buf[i];
+    }
+
+    c = 's'; //改成不是'#'就行,后面还要用来判断的
+    i = i + 1; //往后移位
+    for (int j = 0; c != '#'; i++, j++, c = buf[i]) {
+        phone[j] = buf[i];
+    }
+
+    c = 's';
+    i = i + 1;
+    for (int j = 0; c != '#'; i++, j++, c = buf[i]) {
+        sex[j] = buf[i];
+    }
+    c = 's';
+    i = i + 1;
+    for (int j = 0; c != '#'; i++, j++, c = buf[i]) {
+        money[j] = buf[i];
+    }
+
+    strcpy(staff->name, name);
+    strcpy(staff->phone, phone);
+
+    staff->money = atoi(money);
+    staff->sex = atoi(sex);
     return true;
 }
