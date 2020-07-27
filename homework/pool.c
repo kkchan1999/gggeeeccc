@@ -76,6 +76,8 @@ void* routine(void* arg)
         pthread_mutex_unlock(&pool->lock);
         pthread_cleanup_pop(0);
 
+        print_task(p->info);
+
         time_t t;
         struct tm* local_tm;
         time(&t);
@@ -255,13 +257,27 @@ bool print_staff(staff_info_t* staff)
 {
     FILE* f = fopen("./staff.txt", "a+");
     if (f == NULL) {
-        perror("打开文件失败!");
+        perror("打开staff文件失败!");
         return false;
     }
 
-    fprintf(f, "name:%s,phone:%s,sex:%d,money:%d\n", staff->name, staff->phone, staff->sex, staff->money);
+    fprintf(f, "%s#%s#%d#%d\n", staff->name, staff->phone, staff->sex, staff->money);
 
     fclose(f);
 
+    return true;
+}
+
+bool print_task(task_info_t* task)
+{
+    FILE* f = fopen("./task.txt", "a+");
+    if (f == NULL) {
+        perror("打开task文件失败");
+        return false;
+    }
+
+    fprintf(f, "%s#%s#%s#%d#%d#%d\n", task->name, task->phone, task->task_text, task->vip, task->time, task->money);
+
+    fclose(f);
     return true;
 }

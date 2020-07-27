@@ -1,1 +1,3 @@
-name:陈启康,phone:123,sex:1,money:0
+name:kk,phone:18902581993,sex:1,money:102
+qwe#ewq#0#0
+123#123#1#123
