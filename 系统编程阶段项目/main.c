@@ -1,5 +1,10 @@
 #include "pool.h"
 
+/* 
+系统编程的阶段项目:基于线程池的人员分配系统
+    基本上就是线程池的一些应用, 从文件读取staff后添加第二个任务会出现段错误,目前没找到bug在哪里,不打算修复了
+ */
+
 void mytask(staff_info_t* staff_list, task_t* tasklist)
 {
 
