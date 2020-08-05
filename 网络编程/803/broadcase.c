@@ -10,125 +10,303 @@
 /* According to earlier standards */
 #include <net/if.h>
 #include <net/if_arp.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <sys/types.h>
 
-int get_netcard_broadcase_addr(int skt_fd, char* netcard_name, char* ip_addr, int ip_len)
+enum { online_flag,
+    offline_flag,
+    msg_flag };
+
+struct friend_list {
+    char name[256];
+    struct sockaddr_in addr;
+    struct friend_list* next;
+};
+
+//消息结构体
+struct recv_info {
+    char name[256];
+    int msg_flag;
+    char msg_buffer[1024];
+};
+
+struct glob_info {
+    char name[256];
+    int skt_fd;
+    struct friend_list* list_head;
+};
+
+#define list_for_each(head, pos) \
+    for (pos = head->next; pos != NULL; pos = pos->next)
+
+//申请客户端信息链表的头节点
+static struct friend_list* request_friend_info_node(const struct friend_list* info)
 {
-    int retval;
-    struct ifreq ifr;
-    struct sockaddr_in get_addr, cache_addr;
-    unsigned int addr_numb;
+    struct friend_list* new_node;
 
-    bzero(&ifr, sizeof(ifr)); //内存清空
-
-    strcpy(ifr.ifr_name, netcard_name); //将网卡名字放入到ifr.ifr_name的内存当中，指定好网卡的名字
-
-    retval = ioctl(skt_fd, SIOCGIFADDR, &ifr); //直接获取指定网卡的地址信息到ifr结构体里面
-    if (retval != 0) {
-        perror("获取指定网卡IP地址失败");
-        return -1;
+    new_node = malloc(sizeof(struct friend_list));
+    if (new_node == NULL) {
+        perror("申请客户端节点异常");
+        return NULL;
     }
 
-    memcpy(&get_addr, &(ifr.ifr_addr), sizeof(get_addr)); //将地址信息拷贝到get_addr结构体里面拿来分析
+    if (info != NULL)
+        *new_node = *info;
 
-    addr_numb = ntohl(get_addr.sin_addr.s_addr); //将网络字节数的二进制IP地址转化为本地字节序的二进制IP地址，方便我们下面做IP地址类型的判断
+    new_node->next = NULL;
 
-    printf("本机ip地址：%s\n", inet_ntoa(get_addr.sin_addr)); //将获取到的网卡IP地址打印出来
+    return new_node;
+}
 
-    if ((addr_numb & 0xe0000000) <= 0x60000000) //保留32位IP地址的前三位数据，并且判断，A类地址由于是0开头，所以保留前面3位的最大值是011和面都是0，十六进制数就是0x60000000
-    {
-        cache_addr.sin_addr.s_addr = htonl(addr_numb | 0x00ffffff); //如果他是A类地址，他的网络地址则是前8位二进制，剩下的24位都是主机地址，全部置1便是广播地址（255就是全部都是1），并且转化为网络字节序存放进去变量当中
+static inline void insert_friend_info_node_to_link_list(struct friend_list* head, struct friend_list* insert_node)
+{
+    struct friend_list* pos;
 
-        printf("这个是A类地址，广播地址为%s\n", inet_ntoa(cache_addr.sin_addr)); //将广播地址打印出来
-    } else if ((addr_numb & 0xe0000000) <= 0xa0000000) //同理，B类地址10开头，保留3位则是101是最大值，所以十六进制是0xa0000000
-    {
-        cache_addr.sin_addr.s_addr = htonl(addr_numb | 0x0000ffff);
+    for (pos = head; pos->next != NULL; pos = pos->next)
+        ;
 
-        printf("这个是B类地址，广播地址为%s\n", inet_ntoa(cache_addr.sin_addr));
-    } else if ((addr_numb & 0xe0000000) <= 0xc0000000) //同理，C类地址110开头，保留3位则是110是最大值，所以十六进制是0xc0000000
-    {
-        cache_addr.sin_addr.s_addr = htonl(addr_numb | 0x000000ff);
+    pos->next = insert_node;
+}
 
-        printf("这个是C类地址，广播地址为%s\n", inet_ntoa(cache_addr.sin_addr));
-    } else
-        printf("这个是D类地址（组播地址）");
+//自动检索本地网卡的所有信息，发送广播信息到所有网卡（除本地回环网卡）
+int broadcast_msg_data(int skt_fd, const void* msg, ssize_t msg_len)
+{
+    int i;
+    struct ifconf ifconf;
+    struct ifreq* ifreq;
+    struct sockaddr_in dest_addr;
+    ssize_t send_size;
+    char buf[512]; //缓冲区
+    //初始化ifconf
+    ifconf.ifc_len = 512;
+    ifconf.ifc_buf = buf;
 
-    strncpy(ip_addr, inet_ntoa(cache_addr.sin_addr), ip_len);
+    ioctl(skt_fd, SIOCGIFCONF, &ifconf); //获取所有接口信息
+
+    //接下来一个一个的获取IP地址
+    ifreq = (struct ifreq*)ifconf.ifc_buf;
+
+    //printf("获取到的所有网卡信息结构体长度:%d\n",ifconf.ifc_len);
+    //printf("一个网卡信息结构体的差精度%ld\n", sizeof (struct ifreq));
+
+    //循环分解每个网卡信息
+    //i=(ifconf.ifc_len/sizeof (struct ifreq))等于获取到多少个网卡
+    for (i = (ifconf.ifc_len / sizeof(struct ifreq)); i > 0; i--, ifreq++) {
+        if (ifreq->ifr_flags == AF_INET) //判断网卡信息是不是IPv4的配置
+        {
+            //printf("网卡名字叫 [%s]\n" , ifreq->ifr_name);
+            //printf("网卡配置的IP地址为  [%s]\n" ,inet_ntoa(((struct sockaddr_in*)&(ifreq->ifr_addr))->sin_addr));
+
+            if (strcmp(ifreq->ifr_name, "lo") == 0) //判断如果是本地回环网卡则不广播数据
+                continue;
+
+            ioctl(skt_fd, SIOCGIFBRDADDR, ifreq); //通过网卡名字获取广播地址
+
+            //将网络地址转化为本机地址
+            //printf("该网卡广播地址为 %s\n", inet_ntoa(((struct sockaddr_in *)&(ifreq->ifr_addr))->sin_addr));
+
+            dest_addr.sin_family = AF_INET;
+            dest_addr.sin_port = htons(56633);
+            dest_addr.sin_addr.s_addr = ((struct sockaddr_in*)&(ifreq->ifr_addr))->sin_addr.s_addr;
+
+            send_size = sendto(skt_fd, msg, msg_len,
+                0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+            if (send_size == -1) {
+                perror("发送UDP数据失败\n");
+                return -1;
+            }
+        }
+    }
 
     return 0;
 }
 
-//./udp
+void* recv_broadcast_msg(void* arg)
+{
+    struct recv_info recv_msg, msg_info;
+    struct glob_info* ginfo = arg;
+    socklen_t skt_len = sizeof(struct sockaddr_in);
+
+    //一直接受他人的广播信息，代表好友上线，更新好友链表
+
+    ssize_t recv_size, send_size;
+
+    struct friend_list* new_node;
+    struct friend_list cache_node;
+    struct friend_list *pos, *prev;
+
+    while (1) {
+        bzero(&recv_msg, sizeof(recv_msg));
+
+        recv_size = recvfrom(ginfo->skt_fd, &recv_msg, sizeof(recv_msg),
+            0, (struct sockaddr*)&(cache_node.addr), &skt_len);
+        if (recv_size == -1) {
+            perror("接受UDP数据失败\n");
+            break;
+        }
+
+        printf("你的%s给你发送消息：%s\n", recv_msg.name, recv_msg.msg_buffer);
+
+        switch (recv_msg.msg_flag) {
+        case online_flag:
+            list_for_each(ginfo->list_head, pos)
+            {
+                if (strcmp(pos->name, recv_msg.name) == 0)
+                    break;
+            }
+
+            if (pos != NULL)
+                break;
+
+            //谁谁谁上线了，插入好友链表
+            strcpy(cache_node.name, recv_msg.name);
+            new_node = request_friend_info_node(&cache_node);
+            insert_friend_info_node_to_link_list(ginfo->list_head, new_node);
+            printf("%s上线了\n", new_node->name);
+
+            strcpy(msg_info.name, ginfo->name); //将我们的名字赋值进去
+            msg_info.msg_flag = online_flag; //上线标志
+
+            send_size = sendto(ginfo->skt_fd, &msg_info, msg_info.msg_buffer - msg_info.name,
+                0, (struct sockaddr*)&cache_node.addr, sizeof(struct sockaddr_in)); //回送对方我们的上线信息
+
+            break;
+
+        case offline_flag:
+            //谁谁谁下线了，删除这个好友链表
+            for (pos = ginfo->list_head->next, prev = ginfo->list_head; pos != NULL; prev = pos, pos = pos->next) {
+                if (strcmp(pos->name, recv_msg.name) == 0) {
+                    //找到下线这个b了
+                    prev->next = pos->next; //上一个节点指向pos的next
+                    free(pos);
+                    printf("删除节点成功！\n");
+                    break;
+                }
+            }
+
+            break;
+        case msg_flag:
+            //谁谁谁给你发送消息，将消息如何处理
+            printf("你的%s给你发送消息：%s\n", recv_msg.name, recv_msg.msg_buffer);
+            break;
+        }
+    }
+}
+
+//./udp 昵称
 int main(int argc, const char* argv[])
 {
-    char buffer[1024] = "我来啦";
     int udp_fd;
     int retval;
+    int input_cmd;
     ssize_t send_size;
     char broadcase_addr[16];
     struct sockaddr_in native_addr, dest_addr, recv_addr;
     socklen_t skt_len = sizeof(struct sockaddr_in);
+    struct glob_info ginfo;
+    struct friend_list* pos;
+    pthread_t tid;
 
-    udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udp_fd == -1) {
+    strcpy(ginfo.name, argv[1]);
+    ginfo.list_head = request_friend_info_node(NULL);
+
+    ginfo.skt_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (ginfo.skt_fd == -1) {
         perror("申请套接字失败");
         goto request_socket_err;
     }
 
     int sw = 1;
 
-    retval = setsockopt(udp_fd, SOL_SOCKET, SO_BROADCAST, &sw, sizeof(sw));
+    retval = setsockopt(ginfo.skt_fd, SOL_SOCKET, SO_BROADCAST, &sw, sizeof(sw));
     if (retval == -1) {
         perror("设置程序允许广播出错");
         goto setsock_broadcase_err;
     }
 
     native_addr.sin_family = AF_INET;
-    native_addr.sin_port = htons(6665);
+    native_addr.sin_port = htons(56633);
     native_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    retval = bind(udp_fd, (struct sockaddr*)&native_addr, sizeof(native_addr));
+    retval = bind(ginfo.skt_fd, (struct sockaddr*)&native_addr, sizeof(native_addr));
     if (retval == -1) {
         perror("绑定异常");
         return -1;
     }
 
+    pthread_create(&tid, NULL, recv_broadcast_msg, &ginfo);
+
     //根据网卡名字获取IP地址是多少
-    get_netcard_broadcase_addr(udp_fd, "ens38", broadcase_addr, sizeof(broadcase_addr));
+    //get_netcard_broadcase_addr(udp_fd, "ens38", broadcase_addr, sizeof(broadcase_addr));
 
-    printf("获取的本地广播地址信息：broadcase_ip=%s\n", broadcase_addr);
+    //printf("获取的本地广播地址信息：broadcase_ip=%s\n", broadcase_addr);
 
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(6666);
-    dest_addr.sin_addr.s_addr = inet_addr(broadcase_addr);
+    struct recv_info msg_info;
 
-    send_size = sendto(udp_fd, buffer, strlen(buffer),
-        0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-    if (send_size == -1) {
-        perror("发送UDP数据失败\n");
-        return -1;
-    }
+    strcpy(msg_info.name, argv[1]); //将我们的名字赋值进去
+    msg_info.msg_flag = online_flag; //上线标志
 
-    ssize_t recv_size;
+    broadcast_msg_data(ginfo.skt_fd, &msg_info, msg_info.msg_buffer - msg_info.name); //通知别人我们上线了
 
-    while (1) {
-        bzero(buffer, sizeof(buffer));
+    int exit_flag = 1;
+    while (exit_flag) {
+        scanf("%d", &input_cmd);
 
-        recv_size = recvfrom(udp_fd, buffer, sizeof(buffer),
-            0, (struct sockaddr*)&recv_addr, &skt_len);
-        if (recv_size == -1) {
-            perror("接受UDP数据失败\n");
+        switch (input_cmd) {
+        case 1:
+            //打印好友链表，并且可以找寻一个好友聊天
+            list_for_each(ginfo.list_head, pos)
+            {
+                printf("性感%s，在线陪聊\n", pos->name);
+            }
+            char buf[1024];
+            printf("请输入好友姓名：");
+            scanf("%s", buf);
+            int send_flag = 0;
+            list_for_each(ginfo.list_head, pos)
+            {
+                if (strcmp(buf, pos->name) == 0) {
+                    printf("请输入要发送的信息：\n");
+                    scanf("%s", buf);
+
+                    strcpy(msg_info.msg_buffer, buf);
+                    msg_info.msg_flag = msg_flag;
+
+                    send_size = sendto(ginfo.skt_fd, &msg_info, msg_info.msg_buffer - msg_info.name,
+                        0, (const struct sockaddr*)&pos->addr, sizeof(pos->addr));
+                    // sendto(ginfo.skt_fd, buf, strlen(buf), 0, (const struct sockaddr*)&pos->addr, sizeof(pos->addr));
+                    send_flag = 1;
+                }
+            }
+            if (send_flag != 1) {
+                printf("发送失败！");
+            }
+
+            break;
+        case 2:
+            //仅仅只是打印好友链表
+            list_for_each(ginfo.list_head, pos)
+            {
+                printf("性感%s，在线陪聊\n", pos->name);
+            }
+            break;
+
+        case 0:
+            //下线，通知其他人我们走了
+            msg_info.msg_flag = offline_flag;
+            bzero(msg_info.msg_buffer, sizeof(msg_info.msg_buffer));
+            broadcast_msg_data(ginfo.skt_fd, &msg_info, msg_info.msg_buffer - msg_info.name);
+            exit_flag = 0;
             break;
         }
-
-        printf("读取到%ld字节的数据：%s\n", recv_size, buffer);
     }
 
-    close(udp_fd);
+    close(ginfo.skt_fd);
 
     return 0;
 
