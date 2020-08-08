@@ -406,10 +406,12 @@ int main(int argc, char const *argv[])
                 printf("发送失败！");
             }
             break;
+
         case 2:
             //仅仅只是打印好友链表
             list_for_each(ginfo.list_head, pos)
             {
+
                 printf("%s\n", pos->name);
             }
             break;
@@ -496,6 +498,7 @@ int main(int argc, char const *argv[])
             //群发功能
             printf("请输入要群发的内容：");
             bzero(buf, sizeof(buf));
+            scanf("%s", buf);
             msg_info.msg_flag = msg_flag;
             broadcast_msg_data(ginfo.skt_fd, &msg_info, sizeof(msg_info));
 
