@@ -22,8 +22,7 @@ enum
     online_flag,
     offline_flag,
     msg_flag,
-    file_flag, //多加一个文件flag,接到这个东西之后就开一个tcp线程去准备接收
-    recv_file_flag
+    file_flag //多加一个文件flag,接到这个东西之后就开一个tcp线程去准备接收
 };
 //朋友链表
 struct friend_list
@@ -289,13 +288,6 @@ void *recv_broadcast_msg(void *arg)
 
             break;
 
-        case recv_file_flag:
-            //别人准备好了接收之后
-            //开一个客户端开始发送数据,首先要判断是不是真的要发文件
-            pthread_create(&send_tid, NULL, send_file, recv_msg.msg_buffer); //里面装了端口,怎么知道ip呢?还是说直接不用开线程,用主函数开干?
-
-            break;
-
         default:
             break;
         }
@@ -306,7 +298,7 @@ int main(int argc, char const *argv[])
 {
     int udp_fd;
     int retval;
-    int input_cmd;
+    char input_cmd[256];
     ssize_t send_size;
     char broadcase_addr[16];
     struct sockaddr_in native_addr, dest_addr, recv_addr;
@@ -357,10 +349,17 @@ int main(int argc, char const *argv[])
     bool exit_flag = false;
     while (!exit_flag)
     {
-        int friend_num;
-        scanf("%d", &input_cmd);
+        printf("---------请输入选项---------\n");
+        printf("---------1.私聊------------\n");
+        printf("---------2.查看好友---------\n");
+        printf("---------3.发送文件---------\n");
+        printf("---------4.群发信息---------\n");
+        printf("---------0.退出程序---------\n");
 
-        switch (input_cmd)
+        int friend_num;
+        scanf("%s", input_cmd);
+
+        switch (atoi(input_cmd))
         {
         case 1:
             friend_num = 0;
@@ -492,6 +491,16 @@ int main(int argc, char const *argv[])
             printf("发送完成\n");
 
             break;
+
+        case 4:
+            //群发功能
+            printf("请输入要群发的内容：");
+            bzero(buf, sizeof(buf));
+            msg_info.msg_flag = msg_flag;
+            broadcast_msg_data(ginfo.skt_fd, &msg_info, sizeof(msg_info));
+
+            break;
+
         case 0:
             //下线，通知其他人我们走了
             msg_info.msg_flag = offline_flag; //下线标志
