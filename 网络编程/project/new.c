@@ -107,7 +107,7 @@ int broadcast_msg_data(int skt_fd, const void *msg, ssize_t msg_len)
             ioctl(skt_fd, SIOCGIFBRDADDR, ifreq);
 
             dest_addr.sin_family = AF_INET;
-            dest_addr.sin_port = htons(56653); //为什么是这个？
+            dest_addr.sin_port = htons(56633); //为什么是这个？
             dest_addr.sin_addr.s_addr = ((struct sockaddr_in *)&(ifreq->ifr_addr))->sin_addr.s_addr;
 
             send_size = sendto(skt_fd, msg, msg_len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
@@ -122,6 +122,91 @@ int broadcast_msg_data(int skt_fd, const void *msg, ssize_t msg_len)
     return 0;
 }
 
+void *recv_file(void *arg)
+{
+    int sockfd;
+    int retval;
+
+    char temp[512];
+
+    strcpy(temp, (char *)arg);
+    printf("temp:%s\n", temp);
+
+    //绑定一些信息
+    sockfd = socket(AF_INET, SOCK_STREAM, 0); //ipv4 tcp
+    if (sockfd == -1)
+    {
+        perror("申请套接字失败");
+        pthread_exit(NULL);
+    }
+
+    struct sockaddr_in native_addr;
+
+    native_addr.sin_family = AF_INET;                //指定引用IPV4的协议
+    native_addr.sin_port = htons(6666);              //指定端口号，转化为网络字节序（大端序）
+    native_addr.sin_addr.s_addr = htonl(INADDR_ANY); //将所有的IP地址转化为二进制的网络字节序的数据进行绑定
+
+    retval = bind(sockfd, (struct sockaddr *)&native_addr, sizeof(native_addr));
+    if (retval == -1)
+    {
+        perror("绑定套接字地址失败");
+        pthread_exit(NULL);
+    }
+
+    retval = listen(sockfd, 1); //最多一个
+    if (retval == -1)
+    {
+        perror("设置最大连接数失败");
+        pthread_exit(NULL);
+    }
+
+    int client_fd;
+    struct sockaddr_in client_addr;
+    socklen_t sklen = sizeof(client_addr);
+
+    printf("开始等待连接\n");
+
+    client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &sklen); //阻塞等待连接
+    if (client_fd == -1)
+    {
+        perror("客户端链接失败");
+        pthread_exit(NULL);
+    }
+    printf("服务器：客户端连接成功\n");
+
+    char buf[256];
+
+    //先创建一个文件
+    printf("buf:%s\n", (char *)arg);
+    FILE *f = fopen((char *)arg, "w+"); //这里有点问题
+    int count = 0;
+    while (1)
+    {
+        bzero(buf, sizeof(buf));
+        retval = recv(client_fd, buf, 256, 0);
+        if (retval == -1)
+        {
+            perror("读取错误!");
+        }
+        else if (retval == 0)
+        {
+            printf("连接断开了.\n");
+            break;
+        }
+        else
+        {
+            fwrite(buf, 1, retval, f);
+            count += retval;
+        }
+    }
+    printf("写完了?%d\n", count);
+    fclose(f);
+    close(client_fd); //关闭客户端通信
+    close(sockfd);    //关闭服务器的socket资源
+
+    pthread_exit(NULL);
+}
+
 void *recv_broadcast_msg(void *arg)
 {
     struct recv_info recv_msg, msg_info;
@@ -134,6 +219,7 @@ void *recv_broadcast_msg(void *arg)
     struct friend_list cache_node;
     struct friend_list *pos, *prev;
 
+    pthread_t recv_tid, send_tid;
     // 一直接收别人的信息
     while (1)
     {
@@ -146,7 +232,7 @@ void *recv_broadcast_msg(void *arg)
             perror("接收UDP数据失败");
             break;
         }
-
+        char temp[256];
         switch (recv_msg.msg_flag)
         {
         case online_flag:
@@ -193,24 +279,27 @@ void *recv_broadcast_msg(void *arg)
 
         case file_flag:
             //收到别人发送文件的请求
+            //需要什么参数呢?文件名?对面的信息需要知道吗?
+
+            strcpy(temp, recv_msg.msg_buffer);
+            printf("buf:%s\n", recv_msg.msg_buffer);
+            pthread_create(&recv_tid, NULL, recv_file, (void *)temp);
+
+            //开启一个服务器,准备接收文件,准备完成后给对方发送recv_file_flag的包表明自己准备好了
+
             break;
 
         case recv_file_flag:
             //别人准备好了接收之后
+            //开一个客户端开始发送数据,首先要判断是不是真的要发文件
+            pthread_create(&send_tid, NULL, send_file, recv_msg.msg_buffer); //里面装了端口,怎么知道ip呢?还是说直接不用开线程,用主函数开干?
+
             break;
 
         default:
             break;
         }
     }
-}
-
-void *send_file(void *arg)
-{
-}
-
-void *recv_file(void *arg)
-{
 }
 
 int main(int argc, char const *argv[])
@@ -225,11 +314,11 @@ int main(int argc, char const *argv[])
     struct glob_info ginfo;
     struct friend_list *pos;
     pthread_t tid; //接收用的
+    char buf[1024];
 
     strcpy(ginfo.name, argv[1]);
     ginfo.list_head = request_friend_info_node(NULL);
 
-    ginfo.skt_fd = socket(AF_INET, SOCK_DGRAM, 0);
     ginfo.skt_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (ginfo.skt_fd == -1)
     {
@@ -285,18 +374,124 @@ int main(int argc, char const *argv[])
                 printf("好友链表中没有好友\n");
                 break;
             }
-
+            else
+            {
+                printf("有以下%d位好友\n", friend_num);
+            }
             //打印好友链表，并且可以找寻一个好友聊天
             list_for_each(ginfo.list_head, pos)
             {
-                printf("性感%s，在线陪聊\n", pos->name);
+                printf("%s\n", pos->name);
             }
 
+            printf("请输入好友姓名：");
+            scanf("%s", buf);
+            int send_flag = 0;
+            list_for_each(ginfo.list_head, pos)
+            {
+                if (strcmp(buf, pos->name) == 0)
+                {
+                    printf("请输入要发送的信息：\n");
+                    scanf("%s", buf);
+
+                    strcpy(msg_info.msg_buffer, buf);
+                    msg_info.msg_flag = msg_flag;
+
+                    send_size = sendto(ginfo.skt_fd, &msg_info, sizeof(msg_info), 0, (struct sockaddr *)&pos->addr, sizeof(pos->addr));
+
+                    send_flag = 1;
+                }
+            }
+            if (send_flag != 1)
+            {
+                printf("发送失败！");
+            }
             break;
         case 2:
             //仅仅只是打印好友链表
+            list_for_each(ginfo.list_head, pos)
+            {
+                printf("%s\n", pos->name);
+            }
             break;
+        case 3:
+            //发送文件
+            bzero(buf, sizeof(buf));
+            FILE *f;
+            struct sockaddr_in srv_addr;
+            list_for_each(ginfo.list_head, pos)
+            {
+                printf("%s\n", pos->name);
+            }
 
+            printf("请输入好友姓名：");
+            scanf("%s", buf);
+            send_flag = 0;
+            list_for_each(ginfo.list_head, pos)
+            {
+                if (strcmp(buf, pos->name) == 0)
+                {
+                    srv_addr.sin_family = AF_INET;
+                    srv_addr.sin_port = htons(6666);
+                    srv_addr.sin_addr.s_addr = pos->addr.sin_addr.s_addr;
+                    printf("请输入文件名:");
+                    scanf("%s", buf);
+                    f = fopen(buf, "r");
+                    if (f == NULL)
+                    {
+                        printf("打开文件失败!请检查是否正确填写文件名\n");
+                        break;
+                    }
+                    bzero(msg_info.msg_buffer, sizeof(msg_info.msg_buffer));
+                    strcpy(msg_info.msg_buffer, buf);
+                    msg_info.msg_flag = file_flag;
+
+                    send_size = sendto(ginfo.skt_fd, &msg_info, sizeof(msg_info), 0, (struct sockaddr *)&pos->addr, sizeof(pos->addr));
+
+                    send_flag = 1;
+                }
+            }
+            if (send_flag != 1)
+            {
+                printf("发送失败！");
+            }
+            sleep(2);
+            int skt_fd;
+            skt_fd = socket(AF_INET, SOCK_STREAM, 0);
+            if (skt_fd == -1)
+            {
+                perror("申请套接字失败");
+                break;
+            }
+            retval = connect(skt_fd, (struct sockaddr *)&srv_addr, sizeof(srv_addr));
+            if (retval == -1)
+            {
+                perror("客户端连接到服务器失败\n");
+                break;
+            }
+            printf("开始发送!\n");
+            int count = 0;
+            while (1)
+            {
+                bzero(buf, sizeof(buf));
+                retval = fread(buf, 1, 256, f);
+                if (retval == 0)
+                {
+                    break;
+                }
+                if (retval != send(skt_fd, buf, retval, 0))
+                {
+                    break;
+                }
+                count += retval;
+            }
+            printf("读了%d\n", count);
+            fclose(f);
+            close(skt_fd);
+
+            printf("发送完成\n");
+
+            break;
         case 0:
             //下线，通知其他人我们走了
             msg_info.msg_flag = offline_flag; //下线标志
